@@ -19,9 +19,8 @@ fn cli_version() {
         .stdout(contains(env!("CARGO_PKG_VERSION")));
 }
 
-// `kvs get <KEY>` should print "unimplemented" to stderr and exit with non-zero code
 #[test]
-fn cli_get() {
+fn cli_valid_get() {
     Command::cargo_bin("kvs")
         .unwrap()
         .args(&["get", "key1"])
@@ -30,9 +29,8 @@ fn cli_get() {
         .stdout(contains("None"));
 }
 
-// `kvs set <KEY> <VALUE>` should print "unimplemented" to stderr and exit with non-zero code
 #[test]
-fn cli_set() {
+fn cli_valid_set() {
     Command::cargo_bin("kvs")
         .unwrap()
         .args(&["set", "key1", "value1"])
@@ -40,9 +38,8 @@ fn cli_set() {
         .success();
 }
 
-// `kvs rm <KEY>` should print "unimplemented" to stderr and exit with non-zero code
 #[test]
-fn cli_rm() {
+fn cli_valid_rm() {
     Command::cargo_bin("kvs")
         .unwrap()
         .args(&["rm", "key1"])
