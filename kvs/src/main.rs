@@ -1,7 +1,7 @@
 use clap::{arg, command, Command};
-use kvs::KvStore;
+use kvs::{CommandResult, KvStore};
 
-fn main() {
+fn main() -> CommandResult<()> {
     let mut store = KvStore::new();
 
     let matches = command!()
@@ -30,11 +30,10 @@ fn main() {
             sub_matches.get_one::<String>("KEY").unwrap().to_string(),
             sub_matches.get_one::<String>("VALUE").unwrap().to_string(),
         ),
-        Some(("get", sub_matches)) => println!(
-            "Value of key {:?} {:?}",
-            sub_matches.get_one::<String>("KEY"),
-            store.get(sub_matches.get_one::<String>("KEY").unwrap().to_string()),
-        ),
+        Some(("get", sub_matches)) => {
+            store.get(sub_matches.get_one::<String>("KEY").unwrap().to_string())?;
+            Ok(())
+        }
         Some(("rm", sub_matches)) => {
             store.remove(sub_matches.get_one::<String>("KEY").unwrap().to_string())
         }
