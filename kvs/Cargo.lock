@@ -252,6 +252,8 @@ dependencies = [
  "clap",
  "failure",
  "predicates",
+ "serde",
+ "serde_json",
  "tempfile",
  "walkdir",
 ]
