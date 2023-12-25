@@ -16,11 +16,10 @@ pub type CommandResult<T> = Result<T, Error>;
 
 const LOG_FILE: &str = "log.txt";
 
-#[derive(Serialize, Deserialize, Debug)]
-struct CommandLog {
-    command: String,
-    key: String,
-    value: String,
+#[derive(Serialize, Deserialize)]
+enum CommandLog {
+    Set { key: String, value: String },
+    Remove { key: String },
 }
 
 impl KvStore {
@@ -50,8 +49,7 @@ impl KvStore {
     }
 
     pub fn set(&mut self, key: String, value: String) -> CommandResult<()> {
-        let command_log = CommandLog {
-            command: "set".to_string(),
+        let command_log = CommandLog::Set {
             key: key,
             value: value,
         };
@@ -62,7 +60,10 @@ impl KvStore {
     }
 
     pub fn remove(&mut self, key: String) -> CommandResult<()> {
-        self.map.remove(&key);
+        let command_log = CommandLog::Remove { key: key };
+
+        self.write_command_log(command_log)?;
+
         Ok(())
     }
 
