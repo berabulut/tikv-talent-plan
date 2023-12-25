@@ -24,7 +24,7 @@ enum CommandLog {
 
 impl KvStore {
     pub fn new() -> Self {
-        let kvs = KvStore {
+        KvStore {
             map: HashMap::new(),
             log_file: OpenOptions::new()
                 .write(true)
@@ -32,9 +32,7 @@ impl KvStore {
                 .append(true)
                 .open(LOG_FILE)
                 .unwrap(),
-        };
-
-        return kvs;
+        }
     }
 
     fn write_command_log(&mut self, command_log: CommandLog) -> Result<(), Error> {
