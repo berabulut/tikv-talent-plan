@@ -9,6 +9,7 @@ use std::path::PathBuf;
 
 pub struct KvStore {
     map: HashMap<String, String>,
+    log_file: File,
 }
 
 pub type CommandResult<T> = Result<T, Error>;
@@ -23,25 +24,23 @@ struct CommandLog {
 }
 
 impl KvStore {
-    pub fn new() -> KvStore {
-        KvStore {
+    pub fn new() -> Self {
+        let kvs = KvStore {
             map: HashMap::new(),
-        }
-    }
-    fn open_log_file(&self) -> Result<File, Error> {
-        let f = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .append(true)
-            .open(LOG_FILE)?;
+            log_file: OpenOptions::new()
+                .write(true)
+                .create(true)
+                .append(true)
+                .open(LOG_FILE)
+                .unwrap(),
+        };
 
-        Ok(f)
+        return kvs;
     }
 
-    fn write_command_log(&self, command_log: CommandLog) -> Result<(), Error> {
+    fn write_command_log(&mut self, command_log: CommandLog) -> Result<(), Error> {
         let serialized_log = serde_json::to_string(&command_log)?;
-        let mut log_file = self.open_log_file()?;
-        writeln!(&mut log_file, "{}", serialized_log)?;
+        writeln!(&mut self.log_file, "{}", serialized_log)?;
 
         Ok(())
     }
@@ -69,5 +68,14 @@ impl KvStore {
 
     pub fn open(path: impl Into<PathBuf>) -> CommandResult<KvStore> {
         Ok((KvStore::new()))
+    }
+}
+
+impl Drop for KvStore {
+    fn drop(&mut self) {
+        // Flush and sync the file before closing
+        if let Err(err) = self.log_file.sync_all() {
+            eprintln!("Error syncing file: {:?}", err);
+        }
     }
 }
