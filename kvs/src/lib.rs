@@ -1,11 +1,12 @@
-use failure::Error;
+use failure::{Error, Fail};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
+
+const LOG_FILE: &str = "log.txt";
 
 pub struct KvStore {
     map: HashMap<String, String>,
@@ -14,12 +15,16 @@ pub struct KvStore {
 
 pub type CommandResult<T> = Result<T, Error>;
 
-const LOG_FILE: &str = "log.txt";
-
 #[derive(Serialize, Deserialize)]
 enum CommandLog {
     Set { key: String, value: String },
     Remove { key: String },
+}
+
+#[derive(Fail, Debug)]
+pub enum KvSError {
+    #[fail(display = "Key not provided for command")]
+    KeyNotProvided,
 }
 
 impl KvStore {
@@ -47,20 +52,24 @@ impl KvStore {
     }
 
     pub fn set(&mut self, key: String, value: String) -> CommandResult<()> {
-        let command_log = CommandLog::Set {
+        if key.is_empty() {
+            return Err(KvSError::KeyNotProvided.into());
+        }
+
+        self.write_command_log(CommandLog::Set {
             key: key,
             value: value,
-        };
-
-        self.write_command_log(command_log)?;
+        })?;
 
         Ok(())
     }
 
     pub fn remove(&mut self, key: String) -> CommandResult<()> {
-        let command_log = CommandLog::Remove { key: key };
+        if key.is_empty() {
+            return Err(KvSError::KeyNotProvided.into());
+        }
 
-        self.write_command_log(command_log)?;
+        self.write_command_log(CommandLog::Remove { key: key })?;
 
         Ok(())
     }
