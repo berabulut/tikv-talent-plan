@@ -1,3 +1,4 @@
+use chrono::prelude::*;
 use failure::{Error, Fail};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -5,8 +6,6 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
-
-const LOG_FILE: &str = "log.txt";
 
 pub struct KvStore {
     map: HashMap<String, String>,
@@ -35,7 +34,7 @@ impl KvStore {
                 .write(true)
                 .create(true)
                 .append(true)
-                .open(LOG_FILE)
+                .open(format!("./log/{}.txt", Utc::now()))
                 .unwrap(),
         }
     }
