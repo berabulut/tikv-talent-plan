@@ -2,8 +2,10 @@ use chrono::prelude::*;
 use failure::{Error, Fail};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
 use std::fs::File;
 use std::fs::OpenOptions;
+use std::io::BufRead;
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -28,15 +30,17 @@ pub enum KvSError {
 
 impl KvStore {
     pub fn new() -> Self {
-        KvStore {
-            map: HashMap::new(),
+        let store = KvStore {
+            map: init_map_with_command_logs(),
             log_file: OpenOptions::new()
                 .write(true)
                 .create(true)
                 .append(true)
-                .open(format!("./log/{}.txt", Utc::now()))
+                .open(format!("./cmdlogs/{}.cmdlog", Utc::now()))
                 .unwrap(),
-        }
+        };
+
+        return store;
     }
 
     fn write_command_log(&mut self, command_log: CommandLog) -> Result<(), Error> {
@@ -85,4 +89,50 @@ impl Drop for KvStore {
             eprintln!("Error syncing file: {:?}", err);
         }
     }
+}
+
+fn init_map_with_command_logs() -> HashMap<String, String> {
+    let mut store = HashMap::new();
+    let log_files = list_log_files().unwrap();
+
+    for file in log_files {
+        let file = File::open(file).unwrap();
+        let reader = std::io::BufReader::new(file);
+
+        for line in reader.lines() {
+            let command_log: CommandLog = serde_json::from_str(&line.unwrap()).unwrap();
+            match command_log {
+                CommandLog::Set { key, value } => {
+                    store.insert(key, value);
+                }
+                CommandLog::Remove { key } => {
+                    store.remove(&key);
+                }
+            }
+        }
+    }
+
+    store
+}
+
+fn list_log_files() -> Result<Vec<PathBuf>, Error> {
+    // Read directory entries
+    let entries = fs::read_dir("./cmdlogs/")?
+        .filter_map(|entry| entry.ok())
+        .collect::<Vec<_>>();
+
+    // Return only files with extension .cmdlog
+    let log_files = entries
+        .iter()
+        .filter(|entry| entry.path().is_file())
+        .filter(|entry| {
+            entry
+                .path()
+                .extension()
+                .map_or(false, |ext| ext == "cmdlog")
+        })
+        .map(|entry| entry.path())
+        .collect();
+
+    Ok(log_files)
 }
