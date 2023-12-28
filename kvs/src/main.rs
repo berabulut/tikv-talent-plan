@@ -1,8 +1,8 @@
-use clap::{arg, command, Command};
+use clap::{arg, command, error, Command};
 use kvs::{CommandResult, KvStore};
 
 fn main() -> CommandResult<()> {
-    let mut store = KvStore::new();
+    let mut store = KvStore::open("./")?;
 
     let matches = command!()
         .version("0.1.0")
@@ -41,7 +41,16 @@ fn main() -> CommandResult<()> {
             Ok(())
         }
         Some(("rm", sub_matches)) => {
-            store.remove(sub_matches.get_one::<String>("KEY").unwrap().to_string())
+            let res = store.remove(sub_matches.get_one::<String>("KEY").unwrap().to_string());
+            match res {
+                Err(e) => {
+                    println!("{}", e);
+                    std::process::exit(1)
+                }
+                _ => (),
+            }
+
+            Ok(())
         }
         _ => unreachable!("Provide a command"),
     }
