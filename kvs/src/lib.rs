@@ -30,17 +30,17 @@ pub enum KvSError {
 
 impl KvStore {
     pub fn new() -> Self {
-        let store = KvStore {
-            map: init_map_with_command_logs(),
+        let map = init_map_with_command_logs();
+
+        KvStore {
+            map: map,
             log_file: OpenOptions::new()
                 .write(true)
                 .create(true)
                 .append(true)
-                .open(format!("./cmdlogs/{}.cmdlog", Utc::now()))
+                .open("./cmdlogs/kvlog.cmdlog")
                 .unwrap(),
-        };
-
-        return store;
+        }
     }
 
     fn write_command_log(&mut self, command_log: CommandLog) -> Result<(), Error> {
