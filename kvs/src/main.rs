@@ -31,8 +31,13 @@ fn main() -> CommandResult<()> {
             sub_matches.get_one::<String>("VALUE").unwrap().to_string(),
         ),
         Some(("get", sub_matches)) => {
-            let value = store.get(sub_matches.get_one::<String>("KEY").unwrap().to_string())?;
-            println!("{}", value.unwrap());
+            let value = store.get(sub_matches.get_one::<String>("KEY").unwrap().to_string());
+            match value {
+                Ok(Some(value)) => println!("{}", value),
+                Ok(None) => println!("Key not found"),
+                Err(e) => println!("{}", e),
+            }
+
             Ok(())
         }
         Some(("rm", sub_matches)) => {
