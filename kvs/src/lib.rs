@@ -4,13 +4,14 @@ use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::fs::OpenOptions;
-use std::io::BufRead;
-use std::io::Write;
+use std::io::BufWriter;
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
 pub struct KvStore {
-    map: HashMap<String, String>,
-    log_file: File,
+    map: HashMap<String, u64>,
+    log_writer: BufWriter<File>,
+    log_reader: BufReader<File>,
 }
 
 pub type CommandResult<T> = Result<T, Error>;
@@ -39,26 +40,79 @@ impl KvStore {
         // Initialize map with command logs from previous sessions
         let map = init_map_with_command_logs(&path);
 
-        Ok(KvStore {
-            map: map,
-            log_file: OpenOptions::new()
+        let log_writer = BufWriter::new(
+            OpenOptions::new()
                 .write(true)
                 .create(true)
                 .append(true)
                 .open(path.join("kvlog.cmdlog"))
                 .unwrap(),
+        );
+
+        let log_reader = BufReader::new(
+            OpenOptions::new()
+                .read(true)
+                .open(path.join("kvlog.cmdlog"))
+                .unwrap(),
+        );
+
+        Ok(KvStore {
+            map: map,
+            log_writer,
+            log_reader,
         })
     }
 
-    fn write_command_log(&mut self, command_log: CommandLog) -> Result<(), Error> {
+    fn write_command_log(&mut self, command_log: CommandLog) -> Result<u64, Error> {
         let serialized_log = serde_json::to_string(&command_log)?;
-        writeln!(&mut self.log_file, "{}", serialized_log)?;
 
-        Ok(())
+        let pos = self.log_writer.stream_position()?;
+        writeln!(&mut self.log_writer, "{}", serialized_log)?;
+
+        Ok(pos)
     }
 
-    pub fn get(&self, key: String) -> CommandResult<Option<String>> {
-        Ok(self.map.get(&key).cloned())
+    fn read_from_pos_to_eol(&mut self, pos: u64) -> Result<String, Error> {
+        self.log_writer.flush()?;
+
+        self.log_reader.seek(SeekFrom::Start(pos))?;
+
+        let mut line = String::new();
+
+        // Read characters until the newline is found:
+        loop {
+            let mut buf = [0; 1]; // Buffer to hold a single character
+            let bytes_read = self.log_reader.read(&mut buf)?;
+
+            if bytes_read == 0 {
+                // End of file reached
+                break;
+            }
+
+            if buf[0] == b'\n' {
+                // Newline found, end of line reached
+                break;
+            }
+
+            line.push(buf[0] as char);
+        }
+
+        Ok(line)
+    }
+
+    pub fn get(&mut self, key: String) -> CommandResult<Option<String>> {
+        let res = self.map.get(&key).cloned();
+        match res {
+            Some(pos) => {
+                let line_res = self.read_from_pos_to_eol(pos)?;
+                let command_log: CommandLog = serde_json::from_str(&line_res)?;
+                match command_log {
+                    CommandLog::Set { value, .. } => Ok(Some(value)),
+                    _ => Ok(None),
+                }
+            }
+            _ => Ok(None),
+        }
     }
 
     pub fn set(&mut self, key: String, value: String) -> CommandResult<()> {
@@ -66,12 +120,12 @@ impl KvStore {
             return Err(KvSError::KeyNotProvided.into());
         }
 
-        self.write_command_log(CommandLog::Set {
+        let pos = self.write_command_log(CommandLog::Set {
             key: key.clone(),
             value: value.clone(),
         })?;
 
-        self.map.insert(key, value);
+        self.map.insert(key, pos);
 
         Ok(())
     }
@@ -93,33 +147,29 @@ impl KvStore {
     }
 }
 
-impl Drop for KvStore {
-    fn drop(&mut self) {
-        // Flush and sync the file before closing
-        if let Err(err) = self.log_file.sync_all() {
-            eprintln!("Error syncing file: {:?}", err);
-        }
-    }
-}
-
-fn init_map_with_command_logs(path: impl Into<PathBuf>) -> HashMap<String, String> {
+fn init_map_with_command_logs(path: impl Into<PathBuf>) -> HashMap<String, u64> {
     let mut store = HashMap::new();
     let log_files = list_log_files(path).unwrap();
 
     for file in log_files {
         let file = File::open(file).unwrap();
-        let reader = std::io::BufReader::new(file);
+        let reader = BufReader::new(file);
 
+        let mut pos = 0;
         for line in reader.lines() {
-            let command_log: CommandLog = serde_json::from_str(&line.unwrap()).unwrap();
+            let line = line.unwrap();
+
+            let command_log: CommandLog = serde_json::from_str(&line).unwrap();
             match command_log {
-                CommandLog::Set { key, value } => {
-                    store.insert(key, value);
+                CommandLog::Set { key, .. } => {
+                    store.insert(key, pos);
                 }
                 CommandLog::Remove { key } => {
                     store.remove(&key);
                 }
             }
+
+            pos += line.len() as u64 + 1;
         }
     }
 

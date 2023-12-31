@@ -1,4 +1,4 @@
-use clap::{arg, command, error, Command};
+use clap::{arg, command, Command};
 use kvs::{CommandResult, KvStore};
 
 fn main() -> CommandResult<()> {
