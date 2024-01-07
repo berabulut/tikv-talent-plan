@@ -65,15 +65,18 @@ impl KvStore {
 
     fn write_command_log(&mut self, command_log: CommandLog) -> Result<u64, Error> {
         let serialized_log = serde_json::to_string(&command_log)?;
+        let log_len = serialized_log.len();
 
-        let pos = self.log_writer.stream_position()?;
         writeln!(&mut self.log_writer, "{}", serialized_log)?;
+        self.log_writer.flush()?;
+
+        let pos = self.log_writer.stream_position()? - log_len as u64 - 1;
 
         Ok(pos)
     }
 
     fn read_from_pos_to_eol(&mut self, pos: u64) -> Result<String, Error> {
-        self.log_writer.flush()?;
+        // self.log_writer.flush()?;
 
         self.log_reader.seek(SeekFrom::Start(pos))?;
 
@@ -170,6 +173,14 @@ fn init_map_with_command_logs(path: impl Into<PathBuf>) -> HashMap<String, u64> 
             }
 
             pos += line.len() as u64 + 1;
+        }
+    }
+
+    // drop writer and readers
+    impl Drop for KvStore {
+        fn drop(&mut self) {
+            self.log_writer.flush().unwrap();
+            self.log_reader.seek(SeekFrom::Start(0)).unwrap();
         }
     }
 

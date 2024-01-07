@@ -201,8 +201,7 @@ fn get_stored_value() -> CommandResult<()> {
 // Should overwrite existent value.
 #[test]
 fn overwrite_value() -> CommandResult<()> {
-    let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-    let mut store = KvStore::open(temp_dir.path())?;
+    let mut store = KvStore::open("./")?;
 
     store.set("key1".to_owned(), "value1".to_owned())?;
     assert_eq!(store.get("key1".to_owned())?, Some("value1".to_owned()));
@@ -211,7 +210,7 @@ fn overwrite_value() -> CommandResult<()> {
 
     // Open from disk again and check persistent data.
     drop(store);
-    let mut store = KvStore::open(temp_dir.path())?;
+    let mut store = KvStore::open("./")?;
     assert_eq!(store.get("key1".to_owned())?, Some("value2".to_owned()));
     store.set("key1".to_owned(), "value3".to_owned())?;
     assert_eq!(store.get("key1".to_owned())?, Some("value3".to_owned()));
