@@ -68,7 +68,6 @@ impl KvStore {
         let log_len = serialized_log.len();
 
         writeln!(&mut self.log_writer, "{}", serialized_log)?;
-        self.log_writer.flush()?;
 
         let pos = self.log_writer.stream_position()? - log_len as u64 - 1;
 
@@ -76,7 +75,7 @@ impl KvStore {
     }
 
     fn read_from_pos_to_eol(&mut self, pos: u64) -> Result<String, Error> {
-        // self.log_writer.flush()?;
+        self.log_writer.flush()?;
 
         self.log_reader.seek(SeekFrom::Start(pos))?;
 
@@ -148,6 +147,45 @@ impl KvStore {
 
         Ok(())
     }
+
+    fn create_compacted_log_file(&mut self) -> Result<(), Error> {
+        let new_log_file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(true)
+            .open("kvlog_compact.cmdlog")?;
+
+        self.log_writer = BufWriter::new(new_log_file);
+
+        let keys: Vec<String> = self.map.keys().map(String::from).collect();
+
+        for key in keys {
+            let value = self.get(key.clone())?.unwrap();
+            self.write_command_log(CommandLog::Set {
+                key: key,
+                value: value,
+            })?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Drop for KvStore {
+    fn drop(&mut self) {
+        // Create compacted log file and if successful, delete old log file, and rename compacted log file to old log file name
+        if let Err(e) = self.create_compacted_log_file() {
+            eprintln!("Error creating compacted log file: {}", e);
+        } else {
+            if let Err(e) = fs::remove_file("kvlog.cmdlog") {
+                eprintln!("Error deleting old log file: {}", e);
+            }
+
+            if let Err(e) = fs::rename("kvlog_compact.cmdlog", "kvlog.cmdlog") {
+                eprintln!("Error renaming compacted log file: {}", e);
+            }
+        }
+    }
 }
 
 fn init_map_with_command_logs(path: impl Into<PathBuf>) -> HashMap<String, u64> {
@@ -173,14 +211,6 @@ fn init_map_with_command_logs(path: impl Into<PathBuf>) -> HashMap<String, u64> 
             }
 
             pos += line.len() as u64 + 1;
-        }
-    }
-
-    // drop writer and readers
-    impl Drop for KvStore {
-        fn drop(&mut self) {
-            self.log_writer.flush().unwrap();
-            self.log_reader.seek(SeekFrom::Start(0)).unwrap();
         }
     }
 
